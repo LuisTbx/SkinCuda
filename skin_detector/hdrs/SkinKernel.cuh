@@ -10,9 +10,9 @@
 #include <math.h>
 
 
-__global__ void getSkinMap(uchar* image, float* inverseCovariance, float* mean, float* threshold);
+__global__ void getSkinMap(uchar* image, int cols, int rows, float* inverseCovariance, float* mean, float* threshold);
 
-__global__ void getSkinMask(uchar* image, uchar* output, float* inverseCovariance, float* mean, float* threshold);
+__global__ void getSkinMask(uchar* image, uchar* output, int cols, int rows, float* inverseCovariance, float* mean, float* threshold);
 
 
 #endif

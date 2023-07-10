@@ -36,6 +36,9 @@ private:
     int channels;
     int rows;
     int cols;
+    int threads;
+    dim3 gridDim;
+    dim3 blockDim;
 
 };
 

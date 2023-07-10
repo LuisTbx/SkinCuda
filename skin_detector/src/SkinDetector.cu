@@ -27,6 +27,10 @@ SkinDetector::SkinDetector(float* mInverseCovDev, float* mMean, float mThreshold
     rows = mRows;
     cols = mCols;
     channels = 3;
+    threads = 32;
+
+    blockDim = dim3(threads, threads);
+    gridDim = dim3((mCols + blockDim.x-1 )/blockDim.x, (mRows + blockDim.y-1 )/blockDim.y);
 
     float threshold[1]={mThreshold};
 
@@ -68,8 +72,7 @@ void SkinDetector::skinMap(uchar* image)
     // Copy image data to GPU
     cudaMemcpy(devInput, image, rows*cols*channels, cudaMemcpyHostToDevice);
     // Prepare and launch the kernel
-    dim3 gridImage(cols, rows);
-    getSkinMap << <gridImage, 1 >> >(devInput, inverseCovDev, meanDev, threshDev);
+    getSkinMap <<< gridDim, blockDim, 1 >>>(devInput, cols, rows, inverseCovDev, meanDev, threshDev);
     
     // Copy back the image from GPU
     cudaMemcpy(image, devInput, rows*cols*channels, cudaMemcpyDeviceToHost);
@@ -92,8 +95,7 @@ void SkinDetector::skinMask(uchar* image, uchar* output)
     cudaMemset(devOutput, 0, rows*cols);
 
     // Prepare and launch the kernel
-    dim3 gridImage(cols, rows);
-    getSkinMask << <gridImage, 1 >> >(devInput, devOutput, inverseCovDev, meanDev, threshDev);
+    getSkinMask << <gridDim, blockDim, 1 >> >(devInput, devOutput, cols, rows, inverseCovDev, meanDev, threshDev);
     
     // Copy back the image from GPU
     cudaMemcpy(output, devOutput, rows*cols, cudaMemcpyDeviceToHost);

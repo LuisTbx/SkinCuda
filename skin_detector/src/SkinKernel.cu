@@ -2,23 +2,28 @@
 	typedef unsigned char uchar;
 #endif
 
-
 #include <math.h>
 #include "SkinKernel.cuh"
+#include <stdio.h>
 
-__global__ void getSkinMap(uchar* image, float* inverseCovariance, float* mean, float* threshold)
+__global__ void getSkinMap(uchar* image, int cols, int rows, float* inverseCovariance, float* mean, float* threshold)
 {
-  int x = blockIdx.x;
-	int y = blockIdx.y;
-	int idx = (x + y * gridDim.x) * 3;
-  
-  float B = (float)image[idx]; 
-  float G = (float)image[idx+1];
-  float R = (float)image[idx+2];
+  const int x = blockIdx.x * blockDim.x + threadIdx.x;
+	const int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+  if( x >= cols || y >= rows )
+		return;
+
+	int64_t idx = (x + y * cols) * 3;
+
+  float B, G, R, ng, nr;
+  B = (float)image[idx]; 
+  G = (float)image[idx+1];
+  R = (float)image[idx+2];
 
   // float nb = B /(B+G+R);
-  float ng = (G/(B+G+R)) - mean[1];
-  float nr = (R/(B+G+R)) - mean[0];
+  ng = (G/(B+G+R)) - mean[1];
+  nr = (R/(B+G+R)) - mean[0];
 
   float gate = exp( -0.5f *  (( (nr*nr)*inverseCovariance[0])   
                                 +(2*inverseCovariance[1]*(nr*ng)) 
@@ -32,26 +37,31 @@ __global__ void getSkinMap(uchar* image, float* inverseCovariance, float* mean, 
   }
 }
 
-__global__ void getSkinMask(uchar* image, uchar* output, float* inverseCovariance, float* mean, float* threshold)
+__global__ void getSkinMask(uchar* image, uchar* output, int cols, int rows, float* inverseCovariance, float* mean, float* threshold)
 {
-  int x = blockIdx.x;
-	int y = blockIdx.y;
-	int idx = (x + y * gridDim.x) * 3;
-  
-  float B = (float)image[idx]; 
-  float G = (float)image[idx+1];
-  float R = (float)image[idx+2];
+  const int x = blockIdx.x * blockDim.x + threadIdx.x;
+	const int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+  if( x >= cols || y >= rows )
+		return;
+
+	int64_t idx = (x + y * cols) * 3;
+
+  float B, G, R, ng, nr;
+  B = (float)image[idx]; 
+  G = (float)image[idx+1];
+  R = (float)image[idx+2];
 
   // float nb = B /(B+G+R);
-  float ng = (G/(B+G+R)) - mean[1];
-  float nr = (R/(B+G+R)) - mean[0];
+  ng = (G/(B+G+R)) - mean[1];
+  nr = (R/(B+G+R)) - mean[0];
 
   float gate = exp( -0.5f *  (( (nr*nr)*inverseCovariance[0])   
                                 +(2*inverseCovariance[1]*(nr*ng)) 
                                 +((ng*ng)*inverseCovariance[3]))
                    );
 
-  int maskIdx = (x + y * gridDim.x);
+  int maskIdx = (x + y * cols);
   if (gate >= threshold[0]){
       output[maskIdx] = 255;
   }
