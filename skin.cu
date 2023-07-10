@@ -8,7 +8,7 @@
 int main(void)
 {
 
-  cv::Mat image = cv::imread("test_images/fr.jpeg", -1);
+  cv::Mat image = cv::imread("test_images/test_image.jpeg", -1);
   cv::Mat outImage = cv::Mat::zeros(cv::Size(image.cols, image.rows), CV_8UC3);
 
   cv::Mat covariance = (cv::Mat_<float>(2,2) << 0.0038,-0.0009,-0.0009, 0.0009 );

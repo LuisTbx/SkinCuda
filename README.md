@@ -1,6 +1,6 @@
 # Welcome to the CUDA Skin Detector
 
-## This project is both an implementation of a CUDA Skin detector, and a short guide on how to configure a CMake CUDA project.
+## This project is both an implementation of a CUDA Skin detector, and a short example on how to configure a CMake CUDA project.
 
 It covers the basis for creating a functional library that uses CUDA and OpenCV. In later stages, we show how to use this library in an executable. The project takes advantage of modern CMake syntax and CUDA.
 
@@ -25,10 +25,22 @@ cd build
 cmake ../
 ```
 
-At this point we are ready to buld the project, use `make` to start building. Once build you will find two executables, `skin` and `skinMask`. When ran they will produce `map.jpeg` and `mask.jpg`
+You may find issues about the GPU architecture, please adjust accordingly on lines 30 and 43 of `CMakeLists.txt`. As it is it is mean to work with the 10XX `Pascal` series compute capability 61. 
+
+```
+set_target_properties(${SUBPROJECT} PROPERTIES CUDA_ARCHITECTURES "61")
+```
+
+
+At this point we are ready to buld the project, use `make` to start building. Once built you will find two executables, `skin` and `skinMask`. After running the executables will produce `map.jpeg` and `mask.jpeg` images.
 
 ```
 make -j6
+./skin
+./skinMask
+ls
 ```
+The `map` image sets to zero the background pixels on the original image while the `mask` is a binary mask where the skin pixels are set to 255 and the background 0.
 
-And that is it, if you have any suggestion please reach out by crating an issue or a PR!
+
+And that is it, hope you manage to reproduce these steps. If you have any suggestion or issue please reach out by crating an issue or a PR on GitHub!

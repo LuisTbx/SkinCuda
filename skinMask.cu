@@ -8,7 +8,7 @@
 int main(void)
 {
 
-  cv::Mat image = cv::imread("test_images/fr.jpeg", -1);
+  cv::Mat image = cv::imread("test_images/test_image.jpeg", -1);
   // Single channel output mask
   cv::Mat outImage = cv::Mat::zeros(cv::Size(image.cols, image.rows), CV_8UC1);
 
