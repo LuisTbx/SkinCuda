@@ -17,8 +17,7 @@ int main(int argc, char* argv[])
     }
     std::string image_name = argv[1];
     cv::Mat image = cv::imread(image_name, -1);
-    // Single channel output mask
-    cv::Mat outImage = cv::Mat::zeros(cv::Size(image.cols, image.rows), CV_8UC1);
+    cv::Mat outImage = cv::Mat::zeros(cv::Size(image.cols, image.rows), CV_8UC3);
 
     cv::Mat covariance = (cv::Mat_<float>(2,2) << 0.0038,-0.0009,-0.0009, 0.0009 );
     cv::Mat meanCV = (cv::Mat_<float>(2,1) << 0.4404, 0.3111);
@@ -28,9 +27,10 @@ int main(int argc, char* argv[])
 
     SkinDetector det = SkinDetector((float*)inverseCovariance.data, (float*)meanCV.data, threshold, image.cols, image.rows);
 
-    det.skinMask(image.data, outImage.data);
+    det.skinMap(image.data);
 
-    cv::imwrite("skinMask.jpg", outImage);
+    cv::imwrite("skinMap.jpg", image);
   }
+
   return 0;
 }

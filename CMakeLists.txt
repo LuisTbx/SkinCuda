@@ -29,6 +29,7 @@ target_link_libraries(${PROJECT_NAME} ${OpenCV_LIBRARIES} skin_detector)
 # Set the architecture, for NVIDIA series 10XX use 61
 set_target_properties(${PROJECT_NAME} PROPERTIES CUDA_ARCHITECTURES "61")
 
+############################################################################
 set(SUBPROJECT skinMask)
 add_executable(${SUBPROJECT} 
                skinMask.cu 
@@ -41,6 +42,20 @@ include_directories(${SUBPROJECT}
 
 target_link_libraries(${SUBPROJECT} ${OpenCV_LIBRARIES} skin_detector)
 set_target_properties(${SUBPROJECT} PROPERTIES CUDA_ARCHITECTURES "61")
+
+############################################################################
+set(SUBPROJECTMAP skinMap)
+add_executable(${SUBPROJECTMAP} 
+               skinMap.cu 
+)
+
+include_directories(${SUBPROJECTMAP} 
+                    ${OpenCV_INCLUDE_DIRS} 
+                    skin_detector_INCLUDE_DIRS
+)
+
+target_link_libraries(${SUBPROJECTMAP} ${OpenCV_LIBRARIES} skin_detector)
+set_target_properties(${SUBPROJECTMAP} PROPERTIES CUDA_ARCHITECTURES "61")
 
 # Add custom command to copy images files
 add_custom_target(copy-test-images ALL
