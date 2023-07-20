@@ -5,6 +5,7 @@
 #include <math.h>
 #include "SkinKernel.cuh"
 #include <stdio.h>
+#include <stdint.h>
 
 __global__ void getSkinMap(uchar* image, int cols, int rows, float* inverseCovariance, float* mean, float* threshold)
 {

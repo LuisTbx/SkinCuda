@@ -18,6 +18,16 @@ file(GLOB skin_hdrs
 # Add cuda library
 add_library(${PROJECT_NAME} ${skin_src})
 
+# Make the project compatible with windows
+include (GenerateExportHeader)          
+GENERATE_EXPORT_HEADER(${PROJECT_NAME}           # generates the export header ${PROJECT_NAME}_EXPORTS.h automatically
+    BASE_NAME ${PROJECT_NAME}
+    EXPORT_MACRO_NAME ${PROJECT_NAME}_EXPORTS
+    EXPORT_FILE_NAME ${PROJECT_NAME}_EXPORTS.h
+    STATIC_DEFINE ${PROJECT_NAME}_EXPORTS_BUILT_AS_STATIC
+)
+
+
 # Add include directory
 include_directories(${PROJECT_NAME} 
                     ${OpenCV_INCLUDE_DIRS} 
