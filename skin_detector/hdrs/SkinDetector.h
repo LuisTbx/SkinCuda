@@ -1,45 +1,73 @@
+#pragma once
 #ifndef SKINDETECTOR_H
 #define SKINDETECTOR_H
 
-#pragma once
-
-#include <iostream>
-#include <math.h>
+#include <cuda_runtime.h>
 #include "SkinKernel.cuh"
 
-
 #ifndef uchar
-	typedef unsigned char uchar;
+    typedef unsigned char uchar;
 #endif
 
 class SkinDetector
 {
 public:
     SkinDetector();
-    SkinDetector(float* mInverseCovDev, float* mMean, float mThreshold, int mCols, int mRows);
+
+    /**
+     * @brief Construct a SkinDetector for images of a fixed size.
+     *
+     * @param mInverseCovDev  Row-major 2×2 inverse covariance matrix (4 floats).
+     * @param mMean           Mean normalised-R and normalised-G values (2 floats).
+     * @param mThreshold      Gate threshold in [0, 1]; raise to detect less skin.
+     * @param mCols           Frame width in pixels.
+     * @param mRows           Frame height in pixels.
+     */
+    SkinDetector(float* mInverseCovDev, float* mMean, float mThreshold,
+                 int mCols, int mRows);
     ~SkinDetector();
 
+    // ── Synchronous API ───────────────────────────────────────────────────────
+    // These functions block the calling thread until the GPU has finished.
+
+    /** Zero non-skin pixels directly in 'image' (in-place, 3-channel BGR). */
     void skinMap(uchar* image);
+
+    /** Write a binary mask into 'output' (1-channel: 255 = skin, 0 = background). */
     void skinMask(uchar* image, uchar* output);
 
+    // ── Asynchronous API ──────────────────────────────────────────────────────
+    // Work is queued into 'stream' and the call returns immediately.
+    // Use cudaEventRecord / cudaEventSynchronize to know when a frame is ready.
+    //
+    // IMPORTANT: pinnedFrame / pinnedIn / pinnedOut must be allocated with
+    // cudaHostAlloc so that cudaMemcpyAsync can transfer them without stalling.
+    //
+    // 'slot' selects which internal double-buffer pair (0 or 1) to use.
+    // Alternate slots across frames to overlap GPU work with CPU frame capture.
+
+    /** Async in-place skin map on a pinned host frame. */
+    void skinMapAsync(uchar* pinnedFrame, int slot, cudaStream_t stream);
+
+    /** Async skin mask: reads from pinnedIn, writes binary mask to pinnedOut. */
+    void skinMaskAsync(const uchar* pinnedIn, uchar* pinnedOut,
+                       int slot, cudaStream_t stream);
+
 private:
-    // Algorithm pointers
     float* meanDev;
     float* inverseCovDev;
     float* threshDev;
 
-    // Image data pointers
-    uchar* devInput;
-    uchar* devOutput;
+    // Double-buffered device images — slot 0 is used by synchronous calls;
+    // slots 0 and 1 alternate in the async double-buffered video pipeline.
+    uchar* devInput[2];
+    uchar* devOutput[2];
 
-    // Algo sizes
-    int channels;
-    int rows;
-    int cols;
-    int threads;
-    dim3 gridDim;
-    dim3 blockDim;
-
+    int   channels;
+    int   rows;
+    int   cols;
+    dim3  gridDim;
+    dim3  blockDim;
 };
 
 #endif
