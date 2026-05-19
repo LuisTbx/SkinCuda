@@ -53,6 +53,18 @@ public:
     void skinMaskAsync(const uchar* pinnedIn, uchar* pinnedOut,
                        int slot, cudaStream_t stream);
 
+    // ── GPU-resident API ──────────────────────────────────────────────────────
+    // Use these when the frame is already in device memory (e.g. decoded by
+    // NVDEC via cv::cudacodec::VideoReader).  No host↔device copy is performed.
+
+    /** In-place skin map on a frame that is already on the GPU.
+     *  devFrame must point to a BGR image of size (cols * rows * 3) bytes. */
+    void skinMapInPlace(uchar* devFrame, cudaStream_t stream = 0);
+
+    /** Write a binary mask from a frame already on the GPU.
+     *  devMask must point to a pre-allocated device buffer of (cols * rows) bytes. */
+    void skinMaskInPlace(const uchar* devFrame, uchar* devMask, cudaStream_t stream = 0);
+
 private:
     float* meanDev;
     float* inverseCovDev;

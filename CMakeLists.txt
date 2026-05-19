@@ -6,8 +6,21 @@ project(skin LANGUAGES CXX CUDA)
 
 enable_language(CUDA)
 
-# Look for OpenCV.
+# ── OpenCV ─────────────────────────────────────────────────────────────────────
 find_package(OpenCV REQUIRED)
+
+# Probe for the optional CUDA codec module (requires OpenCV built with NVDEC
+# support via WITH_NVCUVID=ON or WITH_CUDA=ON and the NVIDIA Video Codec SDK).
+# When found, the 'skin' executable gains a zero-copy GPU video-decode path.
+find_package(OpenCV QUIET COMPONENTS cudacodec)
+if(OpenCV_cudacodec_FOUND OR "cudacodec" IN_LIST OpenCV_LIBS OR
+   TARGET opencv_cudacodec)
+    set(HAVE_CUDACODEC ON)
+    message(STATUS "opencv_cudacodec found — GPU video decode path enabled")
+else()
+    set(HAVE_CUDACODEC OFF)
+    message(STATUS "opencv_cudacodec NOT found — GPU video decode path disabled (CPU fallback active)")
+endif()
 
 # Add the skin_detector library.
 add_subdirectory(skin_detector)
@@ -22,11 +35,17 @@ set(CUDA_TARGET_ARCH "120")   # RTX 5060 Ti (Blackwell)
 
 # ── Executables ───────────────────────────────────────────────────────────────
 
-# skin: real-time webcam / video processing with double-buffered GPU pipeline.
+# skin: real-time webcam / video processing.
+# With opencv_cudacodec: compressed video files decode directly on the GPU (NVDEC).
+# Without it: falls back to the double-buffered CPU-capture pipeline.
 add_executable(${PROJECT_NAME} skin.cu)
 include_directories(${PROJECT_NAME} ${OpenCV_INCLUDE_DIRS} skin_detector_INCLUDE_DIRS)
 target_link_libraries(${PROJECT_NAME} ${OpenCV_LIBRARIES} skin_detector)
 set_target_properties(${PROJECT_NAME} PROPERTIES CUDA_ARCHITECTURES ${CUDA_TARGET_ARCH})
+if(HAVE_CUDACODEC)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE HAVE_CUDACODEC)
+    target_link_libraries(${PROJECT_NAME} opencv_cudacodec)
+endif()
 
 # skinMask: generate a binary skin mask from a single image.
 set(SUBPROJECT skinMask)

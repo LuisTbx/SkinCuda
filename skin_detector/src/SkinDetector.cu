@@ -104,3 +104,17 @@ void SkinDetector::skinMaskAsync(const uchar* pinnedIn, uchar* pinnedOut,
                                                    inverseCovDev, meanDev, threshDev);
     cudaMemcpyAsync(pinnedOut, devOutput[slot], outSz, cudaMemcpyDeviceToHost, stream);
 }
+
+// ── GPU-resident API ──────────────────────────────────────────────────────────
+
+void SkinDetector::skinMapInPlace(uchar* devFrame, cudaStream_t stream)
+{
+    getSkinMap<<<gridDim, blockDim, 0, stream>>>(devFrame, cols, rows,
+                                                  inverseCovDev, meanDev, threshDev);
+}
+
+void SkinDetector::skinMaskInPlace(const uchar* devFrame, uchar* devMask, cudaStream_t stream)
+{
+    getSkinMask<<<gridDim, blockDim, 0, stream>>>(devFrame, devMask, cols, rows,
+                                                   inverseCovDev, meanDev, threshDev);
+}
