@@ -15,8 +15,9 @@ Each pixel's normalised R and G components are compared against a Gaussian skin 
 |---|---|
 | Kernel | `__expf` fast intrinsic, `fmaf` fused multiply-add, `__restrict__` / `const` qualifiers, division-by-zero guard, branchless mask write |
 | Block size | 16 × 16 threads (256 / block) — better SM occupancy than 32 × 32 on Blackwell / Ampere |
-| Memory | Explicit `cudaMalloc` device buffers; application uses `cudaHostAlloc` pinned memory for fast PCIe transfers |
+| Memory | Explicit `cudaMalloc` device buffers; pinned host memory (`cudaHostAlloc`) for fast PCIe transfers |
 | Video pipeline | Double-buffered: two CUDA streams alternate so the GPU processes frame N while the CPU reads frame N+1 |
+| GPU decode | When OpenCV is built with NVDEC support, compressed video files are decoded directly into GPU memory — **zero H2D copy** |
 | Architecture | Targets **sm_120 (Blackwell / RTX 50xx)** by default; one variable to change in `CMakeLists.txt` |
 
 ---
@@ -27,7 +28,8 @@ Each pixel's normalised R and G components are compared against a Gaussian skin 
 
 - CMake ≥ 3.26
 - CUDA Toolkit (tested with CUDA 12.x)
-- OpenCV (any recent 4.x build)
+- OpenCV 4.x (core + videoio + highgui)
+- _(optional)_ OpenCV built with `WITH_NVCUVID=ON` to enable GPU video decode
 
 ### Quick start
 
@@ -48,13 +50,24 @@ cmake ..
 make -j$(nproc)
 ```
 
+CMake prints whether GPU video decode is enabled:
+
+```
+-- opencv_cudacodec found — GPU video decode path enabled
+```
+
+or
+
+```
+-- opencv_cudacodec NOT found — GPU video decode path disabled (CPU fallback active)
+```
+
 ### GPU architecture
 
 The default target is **sm_120** (Blackwell, RTX 50xx series).
-To target a different GPU, change one line in `CMakeLists.txt`:
+Change one line in `CMakeLists.txt` to target a different GPU:
 
 ```cmake
-# Root CMakeLists.txt
 set(CUDA_TARGET_ARCH "120")   # change to your GPU's compute capability
 ```
 
@@ -66,10 +79,25 @@ set(CUDA_TARGET_ARCH "120")   # change to your GPU's compute capability
 | Ada Lovelace (RTX 40xx) | 89 |
 | Blackwell (RTX 50xx) | 120 |
 
-For a portable binary that runs on multiple GPU generations, use a semicolon-separated list:
+For a portable binary that runs on multiple GPU generations use a semicolon-separated list:
 ```cmake
 set(CUDA_TARGET_ARCH "61;75;86;89;120")
 ```
+
+### Enabling GPU video decode (optional)
+
+GPU video decode routes compressed video directly through the NVIDIA hardware decoder
+(NVDEC) into GPU memory, eliminating the host↔device copy entirely.
+
+**Requirement**: OpenCV must be compiled with NVDEC support.  On Linux:
+```bash
+cmake -DWITH_CUDA=ON -DWITH_NVCUVID=ON -DOPENCV_EXTRA_MODULES_PATH=../opencv_contrib/modules ..
+```
+
+On Windows, the same flags apply when building OpenCV with the `opencv_contrib` repository.
+Pre-built binaries from opencv.org do **not** include this module for licensing reasons.
+
+**Supported formats** (hardware-dependent): H.264, H.265/HEVC, VP8, VP9, MJPEG.
 
 ---
 
@@ -78,8 +106,9 @@ set(CUDA_TARGET_ARCH "61;75;86;89;120")
 After building, three executables are available in `build/`.
 
 ```bash
-./skin                          # webcam (default)
-./skin test_images/video.avi    # video file
+./skin                          # webcam (CPU capture path)
+./skin test_images/video.avi    # video file (GPU decode if available, else CPU)
+./skin rtsp://camera/stream     # RTSP stream (GPU decode if available)
 
 ./skinMap  test_images/test_image.jpg   # → skinMap.jpg  (non-skin pixels zeroed)
 ./skinMask test_images/test_image.jpg   # → skinMask.jpg (binary mask: 255 = skin)
@@ -98,18 +127,46 @@ Host image  ──cudaMemcpy H→D──▶  devInput  ──kernel──▶  de
             ◀─cudaMemcpy D→H──
 ```
 
-### Asynchronous double-buffered (video)
+### CPU-capture path: double-buffered async (webcam / no NVDEC)
 
 ```
-           CPU                              GPU (stream 0)        GPU (stream 1)
- read frame 0 → pinnedFrame[0]  ──H→D──▶  kernel ──D→H──▶  display frame 0
- read frame 1 → pinnedFrame[1]  ──────────────────── H→D──▶  kernel ──D→H──▶  display frame 1
- read frame 2 → pinnedFrame[0]  ──H→D──▶  kernel ──D→H──▶  display frame 2
- ...
+          CPU                              GPU stream 0          GPU stream 1
+read frame 0 → pinnedBuf[0]  ──H→D──▶  kernel ──D→H──▶  display
+read frame 1 → pinnedBuf[1]  ──────────────────── H→D──▶  kernel ──D→H──▶  display
+read frame 2 → pinnedBuf[0]  ──H→D──▶  kernel ──D→H──▶  display
 ```
 
 CPU frame capture overlaps with GPU computation.  Pinned host memory removes the
-extra copy through the OS page-locked buffer, approximately doubling PCIe throughput.
+OS page-lock copy step, approximately doubling effective PCIe bandwidth.
+
+### GPU-decode path: zero H2D copy (NVDEC + cudacodec)
+
+```
+Compressed video
+    ──NVDEC──▶  GpuMat (device)  ──kernel (in-place)──▶  GpuMat  ──D2H──▶  display
+```
+
+The hardware decoder writes directly to device memory.  The skin kernel operates
+on that buffer without any host involvement.  Only the display download (D2H) touches
+the PCIe bus.
+
+---
+
+## SkinDetector API
+
+```cpp
+// Synchronous (blocks until GPU finishes)
+void skinMap(uchar* image);                        // in-place, host memory
+void skinMask(uchar* image, uchar* output);        // host memory
+
+// Async double-buffered (returns immediately; use cudaEvent to sync)
+void skinMapAsync(uchar* pinnedFrame, int slot, cudaStream_t stream);
+void skinMaskAsync(const uchar* pinnedIn, uchar* pinnedOut, int slot, cudaStream_t stream);
+
+// GPU-resident (frame already on the device — no copy at all)
+void skinMapInPlace(uchar* devFrame, cudaStream_t stream = 0);
+void skinMaskInPlace(const uchar* devFrame, uchar* devMask, cudaStream_t stream = 0);
+```
 
 ---
 
@@ -123,22 +180,21 @@ Default values (tuned on a diverse skin dataset):
 | Mean (nR, nG) | `[0.4404, 0.3111]` |
 | Threshold | `0.33` |
 
-To adjust sensitivity, raise the threshold (fewer skin detections) or lower it
-(more detections, more false positives).
+Raise the threshold to detect less skin (fewer false positives); lower it for higher recall.
 
 ---
 
 ## Project structure
 
 ```
-├── CMakeLists.txt           Root build — three executables, one CUDA_TARGET_ARCH variable
-├── skin.cu                  Live video / webcam with double-buffered GPU pipeline
+├── CMakeLists.txt           Root build — arch variable, optional cudacodec detection
+├── skin.cu                  Live video/webcam: GPU decode path + CPU fallback
 ├── skinMap.cu               Single-image skin map
 ├── skinMask.cu              Single-image binary mask
 └── skin_detector/
     ├── CMakeLists.txt       Library build
     ├── hdrs/
-    │   ├── SkinDetector.h   Public class: synchronous + async API
+    │   ├── SkinDetector.h   Public class: sync / async / GPU-resident API
     │   └── SkinKernel.cuh   Kernel declarations
     └── src/
         ├── SkinDetector.cu  Detector implementation, stream management
