@@ -35,8 +35,8 @@ static int runGpuDecode(const std::string& filename, SkinDetector& det)
     cv::Ptr<cv::cudacodec::VideoReader> reader;
     try {
         cv::cudacodec::VideoReaderInitParams params;
-        params.outputFormat = cv::cudacodec::ColorFormat::BGR;
         reader = cv::cudacodec::createVideoReader(filename, {}, params);
+        reader->set(cv::cudacodec::ColorFormat::BGR);
     } catch (const cv::Exception& e) {
         std::cerr << "[cudacodec] Cannot open '" << filename << "': " << e.what()
                   << "\n[cudacodec] Falling back to CPU capture.\n";
