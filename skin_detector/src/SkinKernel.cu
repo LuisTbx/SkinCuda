@@ -31,7 +31,7 @@ __device__ __forceinline__ float computeGate(
 
 // Applies the skin map in-place: zeroes pixels whose gate value is below the
 // threshold.  Every thread handles exactly one pixel.
-__global__ void getSkinMap(uchar* __restrict__ image, int cols, int rows,
+__global__ void getSkinMap(uchar* __restrict__ image, int cols, int rows, int step,
                            const float* __restrict__ inverseCovariance,
                            const float* __restrict__ mean,
                            const float* __restrict__ threshold)
@@ -40,7 +40,8 @@ __global__ void getSkinMap(uchar* __restrict__ image, int cols, int rows,
     const int y = blockIdx.y * blockDim.y + threadIdx.y;
     if (x >= cols || y >= rows) return;
 
-    const int   idx = (x + y * cols) * 3;
+    // step is bytes-per-row; x*3 advances within the row for BGR.
+    const int   idx = y * step + x * 3;
     const float B   = (float)image[idx];
     const float G   = (float)image[idx + 1];
     const float R   = (float)image[idx + 2];
@@ -55,7 +56,7 @@ __global__ void getSkinMap(uchar* __restrict__ image, int cols, int rows,
 // Writes a binary mask: 255 for skin pixels, 0 for non-skin.
 // Output is written unconditionally (branchless) to avoid warp divergence.
 __global__ void getSkinMask(const uchar* __restrict__ image, uchar* __restrict__ output,
-                            int cols, int rows,
+                            int cols, int rows, int step,
                             const float* __restrict__ inverseCovariance,
                             const float* __restrict__ mean,
                             const float* __restrict__ threshold)
@@ -64,7 +65,8 @@ __global__ void getSkinMask(const uchar* __restrict__ image, uchar* __restrict__
     const int y = blockIdx.y * blockDim.y + threadIdx.y;
     if (x >= cols || y >= rows) return;
 
-    const int   idx = (x + y * cols) * 3;
+    // step is bytes-per-row for the input; output is our own packed 1-channel buffer.
+    const int   idx = y * step + x * 3;
     const float B   = (float)image[idx];
     const float G   = (float)image[idx + 1];
     const float R   = (float)image[idx + 2];

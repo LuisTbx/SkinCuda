@@ -51,8 +51,10 @@ static int runGpuDecode(const std::string& filename, SkinDetector& det)
     for (;;) {
         if (!reader->nextFrame(gpuFrame) || gpuFrame.empty()) break;
 
-        // Run skin detection in-place directly on the device buffer.
-        det.skinMapInPlace(gpuFrame.ptr<uchar>());
+        // Pass actual decoded dimensions and row pitch — NVDEC pads frame rows to
+        // a CUDA alignment boundary, so gpuFrame.step >= gpuFrame.cols * 3.
+        det.skinMapInPlace(gpuFrame.ptr<uchar>(), gpuFrame.cols, gpuFrame.rows,
+                           (int)gpuFrame.step);
 
         // Download only for display (unavoidable; remove if a GPU display path
         // such as OpenGL interop is available).

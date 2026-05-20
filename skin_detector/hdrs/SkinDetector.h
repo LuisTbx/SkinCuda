@@ -61,6 +61,13 @@ public:
      *  devFrame must point to a BGR image of size (cols * rows * 3) bytes. */
     void skinMapInPlace(uchar* devFrame, cudaStream_t stream = 0);
 
+    /** Overload that uses explicit dimensions and row pitch instead of the stored ones.
+     *  Required for GpuMat frames: CUDA aligns each row to a pitch boundary so
+     *  gpuFrame.step is typically larger than gpuFrame.cols * 3.
+     *  frameStep is gpuFrame.step in bytes. */
+    void skinMapInPlace(uchar* devFrame, int frameCols, int frameRows,
+                        int frameStep, cudaStream_t stream = 0);
+
     /** Write a binary mask from a frame already on the GPU.
      *  devMask must point to a pre-allocated device buffer of (cols * rows) bytes. */
     void skinMaskInPlace(const uchar* devFrame, uchar* devMask, cudaStream_t stream = 0);

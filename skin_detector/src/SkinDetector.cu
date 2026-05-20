@@ -63,9 +63,10 @@ SkinDetector::~SkinDetector()
 
 void SkinDetector::skinMap(uchar* image)
 {
-    const size_t sz = (size_t)rows * cols * channels;
+    const size_t sz   = (size_t)rows * cols * channels;
+    const int    step = cols * channels;
     cudaMemcpy(devInput[0], image, sz, cudaMemcpyHostToDevice);
-    getSkinMap<<<gridDim, blockDim>>>(devInput[0], cols, rows,
+    getSkinMap<<<gridDim, blockDim>>>(devInput[0], cols, rows, step,
                                       inverseCovDev, meanDev, threshDev);
     cudaMemcpy(image, devInput[0], sz, cudaMemcpyDeviceToHost);
     cudaDeviceSynchronize();
@@ -75,9 +76,9 @@ void SkinDetector::skinMask(uchar* image, uchar* output)
 {
     const size_t inSz  = (size_t)rows * cols * channels;
     const size_t outSz = (size_t)rows * cols;
+    const int    step  = cols * channels;
     cudaMemcpy(devInput[0], image, inSz, cudaMemcpyHostToDevice);
-    // getSkinMask writes every output pixel (255 or 0), so no memset is needed.
-    getSkinMask<<<gridDim, blockDim>>>(devInput[0], devOutput[0], cols, rows,
+    getSkinMask<<<gridDim, blockDim>>>(devInput[0], devOutput[0], cols, rows, step,
                                        inverseCovDev, meanDev, threshDev);
     cudaMemcpy(output, devOutput[0], outSz, cudaMemcpyDeviceToHost);
     cudaDeviceSynchronize();
@@ -87,9 +88,10 @@ void SkinDetector::skinMask(uchar* image, uchar* output)
 
 void SkinDetector::skinMapAsync(uchar* pinnedFrame, int slot, cudaStream_t stream)
 {
-    const size_t sz = (size_t)rows * cols * channels;
+    const size_t sz   = (size_t)rows * cols * channels;
+    const int    step = cols * channels;
     cudaMemcpyAsync(devInput[slot], pinnedFrame, sz, cudaMemcpyHostToDevice, stream);
-    getSkinMap<<<gridDim, blockDim, 0, stream>>>(devInput[slot], cols, rows,
+    getSkinMap<<<gridDim, blockDim, 0, stream>>>(devInput[slot], cols, rows, step,
                                                   inverseCovDev, meanDev, threshDev);
     cudaMemcpyAsync(pinnedFrame, devInput[slot], sz, cudaMemcpyDeviceToHost, stream);
 }
@@ -99,8 +101,9 @@ void SkinDetector::skinMaskAsync(const uchar* pinnedIn, uchar* pinnedOut,
 {
     const size_t inSz  = (size_t)rows * cols * channels;
     const size_t outSz = (size_t)rows * cols;
+    const int    step  = cols * channels;
     cudaMemcpyAsync(devInput[slot],  pinnedIn,  inSz,  cudaMemcpyHostToDevice, stream);
-    getSkinMask<<<gridDim, blockDim, 0, stream>>>(devInput[slot], devOutput[slot], cols, rows,
+    getSkinMask<<<gridDim, blockDim, 0, stream>>>(devInput[slot], devOutput[slot], cols, rows, step,
                                                    inverseCovDev, meanDev, threshDev);
     cudaMemcpyAsync(pinnedOut, devOutput[slot], outSz, cudaMemcpyDeviceToHost, stream);
 }
@@ -109,12 +112,21 @@ void SkinDetector::skinMaskAsync(const uchar* pinnedIn, uchar* pinnedOut,
 
 void SkinDetector::skinMapInPlace(uchar* devFrame, cudaStream_t stream)
 {
-    getSkinMap<<<gridDim, blockDim, 0, stream>>>(devFrame, cols, rows,
+    getSkinMap<<<gridDim, blockDim, 0, stream>>>(devFrame, cols, rows, cols * channels,
                                                   inverseCovDev, meanDev, threshDev);
+}
+
+void SkinDetector::skinMapInPlace(uchar* devFrame, int frameCols, int frameRows,
+                                   int frameStep, cudaStream_t stream)
+{
+    dim3 grid((frameCols + blockDim.x - 1) / blockDim.x,
+              (frameRows + blockDim.y - 1) / blockDim.y);
+    getSkinMap<<<grid, blockDim, 0, stream>>>(devFrame, frameCols, frameRows, frameStep,
+                                               inverseCovDev, meanDev, threshDev);
 }
 
 void SkinDetector::skinMaskInPlace(const uchar* devFrame, uchar* devMask, cudaStream_t stream)
 {
-    getSkinMask<<<gridDim, blockDim, 0, stream>>>(devFrame, devMask, cols, rows,
+    getSkinMask<<<gridDim, blockDim, 0, stream>>>(devFrame, devMask, cols, rows, cols * channels,
                                                    inverseCovDev, meanDev, threshDev);
 }
