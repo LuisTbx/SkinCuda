@@ -72,6 +72,14 @@ public:
      *  devMask must point to a pre-allocated device buffer of (cols * rows) bytes. */
     void skinMaskInPlace(const uchar* devFrame, uchar* devMask, cudaStream_t stream = 0);
 
+    // ── Async pipeline timing ─────────────────────────────────────────────────
+    // Query per-stage GPU timings for the most-recent skinMapAsync call on the
+    // given slot.  Call only after cudaEventSynchronize on that slot's stream.
+
+    float getH2Dms(int slot)    const;
+    float getKernelMs(int slot) const;
+    float getD2Hms(int slot)    const;
+
 private:
     float* meanDev;
     float* inverseCovDev;
@@ -87,6 +95,12 @@ private:
     int   cols;
     dim3  gridDim;
     dim3  blockDim;
+
+    // Stream-ordered timing events for skinMapAsync (one set per double-buffer slot).
+    cudaEvent_t evStart_[2];
+    cudaEvent_t evAfterH2D_[2];
+    cudaEvent_t evAfterKernel_[2];
+    cudaEvent_t evEnd_[2];
 };
 
 #endif

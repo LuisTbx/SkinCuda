@@ -46,11 +46,22 @@ SkinDetector::SkinDetector(float* mInverseCovDev, float* mMean, float mThreshold
         cudaMalloc(&devInput[i],  inSz);
         cudaMalloc(&devOutput[i], outSz);
     }
+
+    for (int i = 0; i < 2; i++) {
+        cudaEventCreate(&evStart_[i]);
+        cudaEventCreate(&evAfterH2D_[i]);
+        cudaEventCreate(&evAfterKernel_[i]);
+        cudaEventCreate(&evEnd_[i]);
+    }
 }
 
 SkinDetector::~SkinDetector()
 {
     for (int i = 0; i < 2; i++) {
+        cudaEventDestroy(evStart_[i]);
+        cudaEventDestroy(evAfterH2D_[i]);
+        cudaEventDestroy(evAfterKernel_[i]);
+        cudaEventDestroy(evEnd_[i]);
         cudaFree(devInput[i]);
         cudaFree(devOutput[i]);
     }
@@ -90,10 +101,14 @@ void SkinDetector::skinMapAsync(uchar* pinnedFrame, int slot, cudaStream_t strea
 {
     const size_t sz   = (size_t)rows * cols * channels;
     const int    step = cols * channels;
+    cudaEventRecord(evStart_[slot], stream);
     cudaMemcpyAsync(devInput[slot], pinnedFrame, sz, cudaMemcpyHostToDevice, stream);
+    cudaEventRecord(evAfterH2D_[slot], stream);
     getSkinMap<<<gridDim, blockDim, 0, stream>>>(devInput[slot], cols, rows, step,
                                                   inverseCovDev, meanDev, threshDev);
+    cudaEventRecord(evAfterKernel_[slot], stream);
     cudaMemcpyAsync(pinnedFrame, devInput[slot], sz, cudaMemcpyDeviceToHost, stream);
+    cudaEventRecord(evEnd_[slot], stream);
 }
 
 void SkinDetector::skinMaskAsync(const uchar* pinnedIn, uchar* pinnedOut,
@@ -129,4 +144,27 @@ void SkinDetector::skinMaskInPlace(const uchar* devFrame, uchar* devMask, cudaSt
 {
     getSkinMask<<<gridDim, blockDim, 0, stream>>>(devFrame, devMask, cols, rows, cols * channels,
                                                    inverseCovDev, meanDev, threshDev);
+}
+
+// ── Async pipeline timing ─────────────────────────────────────────────────────
+
+float SkinDetector::getH2Dms(int slot) const
+{
+    float ms = 0.0f;
+    cudaEventElapsedTime(&ms, evStart_[slot], evAfterH2D_[slot]);
+    return ms;
+}
+
+float SkinDetector::getKernelMs(int slot) const
+{
+    float ms = 0.0f;
+    cudaEventElapsedTime(&ms, evAfterH2D_[slot], evAfterKernel_[slot]);
+    return ms;
+}
+
+float SkinDetector::getD2Hms(int slot) const
+{
+    float ms = 0.0f;
+    cudaEventElapsedTime(&ms, evAfterKernel_[slot], evEnd_[slot]);
+    return ms;
 }
