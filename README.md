@@ -204,3 +204,5 @@ Raise the threshold to detect less skin (fewer false positives); lower it for hi
 ---
 
 If you have suggestions or run into issues, open an issue or PR on GitHub.
+
+Aknowledgement: The first implementation of this repo started following the video tutorial from:  [https://github.com/abubakr-shafique/Image_Inversion_CUDA_CPP]

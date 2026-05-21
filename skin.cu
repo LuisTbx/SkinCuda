@@ -1,4 +1,3 @@
-// Losely based on https://github.com/abubakr-shafique/Image_Inversion_CUDA_CPP/blob/master/kernel.cu
 #include <iostream>
 #include <cstring>
 #include <chrono>
